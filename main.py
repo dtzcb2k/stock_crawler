@@ -1,4 +1,5 @@
 import time
+import sqlite3
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -8,6 +9,23 @@ import sys
 
 # 設定輸出字元編碼
 sys.stdout.reconfigure(encoding="UTF-8")
+
+# 初始化資料庫
+conn = sqlite3.connect("news_articles.db")
+cursor = conn.cursor()
+
+# 建立表格
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    link TEXT,
+    source TEXT,
+    publish_time TEXT,
+    content TEXT
+)
+""")
+conn.commit()
 
 # 防止瀏覽器自動關閉
 option = webdriver.ChromeOptions()
@@ -32,73 +50,76 @@ WebDriverWait(driver, 10).until(
 
 # 找到所有的新聞項目
 news = driver.find_elements(By.CSS_SELECTOR, "li[class*='StreamMegaItem']")
+news = news[:20]
 
-# 開啟文件寫入結果
-with open("news_articles.txt", "w", encoding="utf-8") as file:
-    for count in range(len(news)):
+for count in range(len(news)):
+    try:
+        # 查找每篇新聞的<a>標籤
+        a_tag = news[count].find_element(By.TAG_NAME, "a")
+        title = a_tag.text
+        link = a_tag.get_attribute("href")
+        print("新聞標題：", title)
+        print("新聞連結：", link)
+
+        # 進入新聞詳細頁面
+        driver.get(link)
+
+        # 等待新聞內容加載
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div[class='caas-body'] p"))
+        )
+        
+        # 新聞來源
+        source = None
         try:
-            # 查找每篇新聞的<a>標籤
-            a_tag = news[count].find_element(By.TAG_NAME, "a")
-            print("新聞標題：", a_tag.text)
-            print("新聞連結：", a_tag.get_attribute("href"))
-            file.write(f"新聞標題：{a_tag.text}\n")
-            file.write(f"新聞連結：{a_tag.get_attribute('href')}\n")
-            file.write("-" * 40 + "\n")
-
-            # 點擊進入新聞詳細頁面
-            a_tag.click()
-
-            # 等待新聞內容加載
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='caas-body'] p"))
-            )
-            
-            # 新聞來源
-            try:
-                # 找到包含 class="caas-attr-item-author" 的 div
-                author_div = driver.find_element(By.CLASS_NAME, "caas-attr-item-author")
-                # 在 div 中找到 span 標籤
-                span_tag = author_div.find_element(By.TAG_NAME, "span")
-                print("新聞來源：", span_tag.text)
-                file.write(f"新聞來源：{span_tag.text}\n")
-                file.write("-" * 40 + "\n")
-            except Exception as e:
-                print(f"未爬取到新聞來源: {e}")
-                
-            # 新聞發布時間
-            try:
-                # 等待 <div> 出現
-                time_div = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "caas-attr-time-style"))
-                )
-                # 在 <div> 中找到 <time> 標籤
-                time_tag = time_div.find_element(By.TAG_NAME, "time")
-                print(f"新聞發布時間: {time_tag.text}")
-                file.write(f"新聞發布時間：{time_tag.text}\n")
-                file.write("-" * 40 + "\n")
-            except Exception as e:
-                print(f"未爬取到新聞發布時間: {e}")
-
-            # 抓取新聞內容
-            word = driver.find_elements(By.CSS_SELECTOR, "div[class*='caas-body'] p")
-            for p_tag in word:
-                print("新聞文章：", p_tag.text)
-                file.write(p_tag.text + "\n")
-            file.write("=" * 40 + "\n")
-
-            # 點擊返回上一頁
-            driver.back()
-
-            # 等待返回後頁面加載完成
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "li[class*='StreamMegaItem']"))
-            )
-            
-            # 再次查找所有新聞項目
-            news = driver.find_elements(By.CSS_SELECTOR, "li[class*='StreamMegaItem']")
-
+            author_div = driver.find_element(By.CLASS_NAME, "caas-attr-item-author")
+            span_tag = author_div.find_element(By.TAG_NAME, "span")
+            source = span_tag.text
+            print("新聞來源：", source)
         except Exception as e:
-            print("處理過程中發生錯誤：", e)
+            print(f"未爬取到新聞來源: {e}")
+            
+        # 新聞發布時間
+        publish_time = None
+        try:
+            time_div = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "caas-attr-time-style"))
+            )
+            time_tag = time_div.find_element(By.TAG_NAME, "time")
+            publish_time = time_tag.text
+            print(f"新聞發布時間: {publish_time}")
+        except Exception as e:
+            print(f"未爬取到新聞發布時間: {e}")
+
+        # 抓取新聞內容
+        content = []
+        word = driver.find_elements(By.CSS_SELECTOR, "div[class*='caas-body'] p")
+        for p_tag in word:
+            content.append(p_tag.text)
+        content = "\n".join(content)
+        print("新聞文章：", content)
+
+        # 插入資料庫
+        cursor.execute("""
+            INSERT INTO news (title, link, source, publish_time, content)
+            VALUES (?, ?, ?, ?, ?)
+        """, (title, link, source, publish_time, content))
+        conn.commit()
+
+        # 點擊返回上一頁
+        driver.back()
+
+        # 等待返回後頁面加載完成
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "li[class*='StreamMegaItem']"))
+        )
+        
+        # 再次查找所有新聞項目
+        news = driver.find_elements(By.CSS_SELECTOR, "li[class*='StreamMegaItem']")
+        news = news[:20]
+    except Exception as e:
+        print("處理過程中發生錯誤：", e)
 
 # 結束並關閉瀏覽器
 driver.quit()
+conn.close()
