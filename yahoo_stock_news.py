@@ -1,5 +1,4 @@
 # 抓yahoo股票下方的新聞
-import csv
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -7,127 +6,160 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import sys
+from datetime import datetime
 
-# 讀取 CSV 文件並存儲為字典
-def read_csv_to_dict(csv_file):
-    categories_dict = {}
-    try:
-        with open(csv_file, mode="r", encoding="utf-8") as file:
-            csv_reader = csv.reader(file)
-            for row in csv_reader:
-                category = row[0]
-                numbers = [num.strip() for num in row[1:]]  # 去除多餘空白
-                categories_dict[category] = numbers
-    except FileNotFoundError:
-        print(f"未找到檔案：{csv_file}")
-    except Exception as e:
-        print(f"讀取 CSV 時發生錯誤：{e}")
-    return categories_dict
+stock_dict = {'光電業': ['2323', '2349', '2374', '2393', '2406', '2409', '2466', '2486', '2489', '3008', '3019', '3049', '3059', '3362', '3406', '3454', '3455', '3481', '3504', '3563', '3576', '3622', '3673', '3691', '3714', '4935', '4942', '4960', '4976', '5234', '5243', '5371', '5443', '6116', '6120', '6125', '6176', '6244', '6278', '6443', '6456', '6706', '8064', '8069', '8105', '8215'], 
+'其他業': ['1342', '1435', '1437', '1584', '2348', '2514', '5530', '5871', '5871A', '6184', '6464', '6585', '6592', '6655', '6901', '6914', '6957', '8033', '8404', '8442', '8916', '8932', '8936', '8942', '9905', '9907', '9917', '9925', '9927', '9933', '9938', '9939', '9940', '9941', '9942', '9945'], 
+'其他電子業': ['1785', '2312', '2317', '2354', '2359', '2360', '2373', '2404', '2433', '2459', '2464', '2474', '3030', '3131', '3289', '3305', '3324', '3402', '3552', '3587', '3617', '3663', '3665', '5225', '5536', '6139', '6146', '6187', '6192', '6196', '6409', '6438', '6613', '6667', '6691', '6743', '6830', '6903', '8085'], 
+'化學工業': ['1708', '1709', '1710', '1711', '1712', '1713', '1714', '1717', '1718', '1722', '1723', '1725', '1726', '1773', '4707', '4739', '4755', '4763', '4766', '4768', '4770', '6509'],
+ '半導體業': ['2303', '2329', '2330', '2337', '2338', '2340', '2344', '2351', '2363', '2369', '2379', '2388', '2401', '2408', '2436', '2441', '2449', '2451', '2454', '2458', '2481', '3006', '3014', '3016', '3034', '3035', '3105', '3141', '3169', '3189', '3227', '3228', '3260', '3264', '3265', '3374', '3413', '3443', '3450', '3529', '3530', '3532', '3545', '3583', '3592', '3661', '3675', '3680', '3707', '3711', '4919', '4952', '4961', '4966', '4967', '4968', '5222', '5236', '5269', '5274', '5285', '5347', '5351', '5425', '5471', '5483', '6104', '6138', '6147', '6182', '6202', '6223', '6239', '6257', '6261', '6271', '6411', '6415', '6451', '6462', '6488', '6510', '6515', '6525', '6526', '6531', '6533', '6548', '6640', '6643', '6679', '6683', '6695', '6719', '6732', '6756', '6770', '6788', '6789', '6854', '6895', '6937', '6953', '8016', '8028', '8054', '8081', '8086', '8091', '8110', '8131', '8150', '8227', '8261', '8271', '8299'], 
+'塑膠工業': ['1301', '1303', '1304', '1305', '1307', '1308', '1309', '1310', '1312', '1313', '1314', '1315', '1321', '1326', '4306'], 
+'居家生活': ['3557', '5903', '5904', '8464', '8482', '9911', '9924', '9934'], 
+'建材營造業': ['1436', '1442', '1808', '2442', '2501', '2504', '2505', '2511', '2515', '2520', '2524', '2527', '2528', '2530', '2534', '2535', '2536', '2537', '2538', '2539', '2540', '2542', '2543', '2545', '2546', '2547', '2548', '2597', '2718', '2923', '3056', '3188', '3266', '3703', '4113', '4907', '5206', '5213', '5508', '5511', '5512', '5519', '5522', '5525', '5531', '5533', '5534', '6177', '6186', '6212', '9906', '9946'], 
+'數位雲端': ['2640', '3130', '5287', '6689', '6741', '6763', '6811', '8454'], 
+'文化創意業': ['3293', '5263', '5478', '6111', '6180'], 
+'橡膠工業': ['2101', '2102', '2103', '2104', '2105', '2106', '2107', '2108', '2114', '6582'], 
+'水泥工業': ['1101', '1102', '1103', '1104', '1108', '1109', '1110'], 
+'汽車工業': ['1319', '1522', '1536', '1563', '2201', '2204', '2206', '2207', '2227', '2228', '2231', '2233', '2247', '2258', '2497', '4551', '6288', '6605'], 
+'油電燃氣業': ['6505', '8908', '8917', '8926', '8927', '8931', '9908', '9918', '9926', '9937'], 
+'玻璃陶瓷': ['1802'], 
+'生技醫療業': ['1565', '1701', '1707', '1720', '1760', '1784', '1786', '1789', '1795', '1799', '3218', '3705', '4104', '4105', '4107', '4114', '4119', '4123', '4126', '4128', '4129', '4137', '4142', '4147', '4157', '4162', '4164', '4167', '4174', '4726', '4728', '4736', '4743', '4746', '4771', '6446', '6469', '6472', '6491', '6523', '6534', '6535', '6541', '6547', '6550', '6569', '6576', '6589', '6612', '6617', '6703', '6712', '6762', '6782', '6785', '6841', '6875', '6949', '8436'], 
+'紡織纖維': ['1402', '1409', '1419', '1434', '1440', '1444', '1446', '1447', '1455', '1457', '1476', '1477', '4438'], 
+'綠能環保': ['3708', '6581', '6803', '6806', '6869', '6873', '8341', '8390', '8422', '8473', '9930'], 
+'航運業': ['2208', '2603', '2605', '2606', '2607', '2608', '2609', '2610', '2612', '2615', '2617', '2618', '2630', '2633', '2634', '2636', '2637', '2645', '5607', '5608', '5609', '6753', '6757'], 
+'觀光餐旅': ['1268', '2704', '2706', '2707', '2722', '2723', '2727', '2729', '2731', '2739', '2748', '2752', '2753', '4419', '9943'], 
+'貿易百貨業': ['2601', '2903', '2905', '2908', '2912', '2913', '2915'], 
+'資訊服務業': ['2453', '2480', '3029', '4953', '4994', '5203', '5403', '6112', '6183', '6214', '6221', '6231', '8099'], 
+'通信網路業': ['2314', '2332', '2345', '2412', '2419', '2439', '2450', '2455', '2485', '2498', '3045', '3047', '3062', '3081', '3138', '3152', '3163', '3363', '3380', '3491', '3558', '3596', '3694', '3704', '4904', '4906', '4908', '4909', '4977', '4979', '5388', '6143', '6190', '6245', '6263', '6285', '6416', '6442', '6546', '6561', '6863', '8059', '8089'], 
+'造紙工業': ['1903', '1904', '1905', '1907', '1909', '6790'], 
+'運動休閒': ['1736', '2762', '4536', '5306', '6670', '6768', '6890', '8462', '8467', '8478', '8924', '8938', '9802', '9904', '9910', '9914', '9921'], 
+'金融保險業': ['2801', '2809', '2812', '2816', '2820', '2832', '2834', '2836', '2838', '2838A', '2845', '2849', '2850', '2851', '2852', '2855', '2867', '2880', '2881', '2881A', '2881B', '2881C', '2882', '2882A', '2882B', '2883', '2883B', '2884', '2885', '2886', '2887', '2887E', '2887F', '2888', '2888B', '2889', '2890', '2891', '2891B', '2891C', '2892', '2897', '5864', '5876', '5880', '6005', '6016', '6021', '6023', '6024', '6026'], 
+'鋼鐵工業': ['2002', '2006', '2009', '2010', '2012', '2013', '2014', '2015', '2017', '2020', '2023', '2027', '2028', '2029', '2031', '2034', '2035', '2211', '5007', '5009', '8349', '8415', '9958'], 
+'電器電纜': ['1603', '1604', '1605', '1608', '1609', '1611', '1612', '1614', '1615', '1618', '5283'], 
+'電子通路業': ['2347', '2414', '3010', '3028', '3033', '3036', '3048', '3055', '3209', '3312', '3702', '3702A', '5434', '6189', '6281', '8070', '8084', '8112'], 
+'電子零組件業': ['1582', '1815', '2059', '2308', '2313', '2316', '2327', '2328', '2355', '2367', '2368', '2375', '2383', '2385', '2392', '2402', '2420', '2421', '2428', '2457', '2467', '2472', '2476', '2478', '2492', '2493', '3003', '3015', '3023', '3026', '3032', '3037', '3042', '3044', '3078', '3090', '3207', '3217', '3338', '3357', '3376', '3501', '3526', '3533', '3548', '3605', '3653', '3679', '3689', '3715', '4912', '4915', '4927', '4958', '5309', '5340', '5381', '5439', '5457', '5469', '6115', '6153', '6173', '6191', '6197', '6203', '6213', '6269', '6274', '6279', '6282', '6284', '6290', '6412', '6449', '6584', '6664', '6715', '6781', '6805', '8039', '8046', '8109', '8121', '8155', '8213', '8358'], 
+'電機機械': ['1503', '1504', '1513', '1514', '1515', '1519', '1532', '1535', '1537', '1558', '1560', '1580', '1583', '1590', '1597', '2049', '2230', '2371', '4506', '4526', '4532', '4533', '4549', '4566', '4571', '4576', '4583', '5288', '6829', '8027', '8255', '8374', '8996'], 
+'電腦及週邊設備業': ['2301', '2324', '2331', '2352', '2353', '2356', '2357', '2362', '2365', '2376', '2377', '2382', '2387', '2395', '2397', '2405', '2417', '2465', '2495', '3005', '3013', '3017', '3022', '3088', '3211', '3231', '3416', '3479', '3483', '3515', '3611', '3693', '3701', '3706', '3712', '4938', '5258', '5289', '5474', '6117', '6121', '6166', '6188', '6206', '6230', '6235', '6277', '6414', '6577', '6579', '6669', '6928', '6933', '8050', '8076', '8114', '8163', '8210', '8234'], 
+'食品工業': ['1201', '1203', '1210', '1215', '1216', '1218', '1225', '1227', '1229', '1231', '1232', '1234', '1235', '1256', '1264', '1702', '1737', '4205']}
+
+def Ad_block(files):
+    # 過濾出包含 <div class='CF'> 的項目
+    news = []#只存herf
+    turn = True
+    for i in files:
+        try:
+            # 檢查是否包含子元素 <div class='CF'>
+            i.find_element(By.CSS_SELECTOR, "div[class = 'Cf']")
+            turn = True
+        except Exception:
+            # 若未找到 <div class='CF'>，跳過該項目
+            turn = False
+            continue
+        if turn:  # 確認找到後加入過濾結果
+            a_tag = i.find_element(By.TAG_NAME, "a")
+            href = a_tag.get_attribute("href")
+            news.append(href)  # 儲存新聞連結
+    news = news[:10]
+    print(news)
+    return news
 
 # 設定輸出字元編碼
 sys.stdout.reconfigure(encoding="UTF-8")
 
 # 防止瀏覽器自動關閉
 option = webdriver.ChromeOptions()
+option.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 option.add_experimental_option("detach", True)
 driver = webdriver.Chrome(options=option)
 
 url = "https://tw.stock.yahoo.com/"
 driver.get(url)
-# 讀取 CSV
-csv_file = "stock.csv"  # CSV 文件名稱
-stock_dict = read_csv_to_dict(csv_file)
+# 取得今天的日期
+today = datetime.today().strftime("%Y%m%d")
 
-count = 0
-for category, stock in stock_dict.items():
-    count+=1
-    print(category,stock)
-    # 等待搜索框加載並輸入關鍵字
-    search_box = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, "ssb-search-input"))
-    )
-    search_box.send_keys(stock)
-    time.sleep(1)
-    search_box.send_keys(Keys.ENTER)
 
-    # 等待搜索結果加載
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "li[class*='StreamMegaItem']"))
-    )
+for category, stocks in stock_dict.items():
+    print(category,stocks)
+    for stock in stocks:
+        print("股票代碼: ",stock)
+        
+        stock_number = stock
+        file_name = f"stock_{stock_number}_{today}.txt"
+        
+        # 等待搜索框加載並輸入關鍵字
+        search_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "ssb-search-input"))
+        )
+        search_box.clear()
+        search_box.send_keys(stock)
+        time.sleep(1)
+        search_box.send_keys(Keys.ENTER)
 
-    # 找到所有的新聞項目
-    news = driver.find_elements(By.CSS_SELECTOR, "li[class*='StreamMegaItem']")
-    news = news[:20]
+        # 等待搜索結果加載
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "li[class*='js-stream-content Pos(r)']"))
+        )
 
-    # 開啟文件寫入結果
-    with open("news_articles.txt", "w", encoding="utf-8") as file:
-        for count in range(len(news)):
-            try:
-                # 查找每篇新聞的<a>標籤
-                a_tag = news[count].find_element(By.TAG_NAME, "a")
-                print("新聞標題：", a_tag.text)
-                print("新聞連結：", a_tag.get_attribute("href"))
-                file.write(f"新聞標題：{a_tag.text}\n")
-                file.write(f"新聞連結：{a_tag.get_attribute('href')}\n")
-                file.write("-" * 40 + "\n")
+        # 找到所有的新聞項目
+        all_news = driver.find_elements(By.CSS_SELECTOR, "li[class*='js-stream-content Pos(r)']")
+        news = Ad_block(all_news)
 
-                # 進入新聞詳細頁面
-                driver.get(a_tag.get_attribute("href"))
-
-                # 等待新聞內容加載
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div[class='caas-body'] p"))
-                )
-                
-                # 新聞來源
+        # 開啟文件寫入結果
+        with open(file_name, "w", encoding="utf-8") as file:
+            for count in range(len(news)):
                 try:
-                    # 找到包含 class="caas-attr-item-author" 的 div
-                    author_div = driver.find_element(By.CLASS_NAME, "caas-attr-item-author")
-                    # 在 div 中找到 span 標籤
-                    span_tag = author_div.find_element(By.TAG_NAME, "span")
-                    print("新聞來源：", span_tag.text)
-                    file.write(f"新聞來源：{span_tag.text}\n")
+                    # 進入新聞詳細頁面
+                    driver.get(news[count])
+
+                    title = driver.find_element(By.CLASS_NAME, "caas-title-wrapper")
+                    title_name = driver.find_element(By.TAG_NAME,"h1")
+                    print("新聞標題：", title_name.text)
+                    print("新聞連結：", news[count])
+                    file.write(f"新聞標題：{title_name.text}\n")
+                    file.write(f"新聞連結：{news[count]}\n")
                     file.write("-" * 40 + "\n")
-                except Exception as e:
-                    print(f"未爬取到新聞來源: {e}")
-                    
-                # 新聞發布時間
-                try:
-                    # 等待 <div> 出現
-                    time_div = WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "caas-attr-time-style"))
+
+                    # 等待新聞內容加載
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "div[class='caas-body'] p"))
                     )
-                    # 在 <div> 中找到 <time> 標籤
-                    time_tag = time_div.find_element(By.TAG_NAME, "time")
-                    print(f"新聞發布時間: {time_tag.text}")
-                    file.write(f"新聞發布時間：{time_tag.text}\n")
-                    file.write("-" * 40 + "\n")
+                    
+                    # 新聞來源
+                    try:
+                        # 找到包含 class="caas-attr-item-author" 的 div
+                        author_div = driver.find_element(By.CLASS_NAME, "caas-attr-item-author")
+                        # 在 div 中找到 span 標籤
+                        span_tag = author_div.find_element(By.TAG_NAME, "span")
+                        print("新聞來源：", span_tag.text)
+                        file.write(f"新聞來源：{span_tag.text}\n")
+                        file.write("-" * 40 + "\n")
+                    except Exception as e:
+                        print(f"未爬取到新聞來源: {e}")
+                        
+                    # 新聞發布時間
+                    try:
+                        # 等待 <div> 出現
+                        time_div = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.CLASS_NAME, "caas-attr-time-style"))
+                        )
+                        # 在 <div> 中找到 <time> 標籤
+                        time_tag = time_div.find_element(By.TAG_NAME, "time")
+                        print(f"新聞發布時間: {time_tag.text}")
+                        file.write(f"新聞發布時間：{time_tag.text}\n")
+                        file.write("-" * 40 + "\n")
+                    except Exception as e:
+                        print(f"未爬取到新聞發布時間: {e}")
+
+                    # 抓取新聞內容
+                    print("新聞文章：")
+                    word = driver.find_elements(By.CSS_SELECTOR, "div[class*='caas-body'] p")
+                    for p_tag in word:
+                        print(p_tag.text)
+                        file.write(p_tag.text + "\n")
+                    file.write("=" * 40 + "\n")
+
                 except Exception as e:
-                    print(f"未爬取到新聞發布時間: {e}")
-
-                # 抓取新聞內容
-                print("新聞文章：")
-                word = driver.find_elements(By.CSS_SELECTOR, "div[class*='caas-body'] p")
-                for p_tag in word:
-                    print(p_tag.text)
-                    file.write(p_tag.text + "\n")
-                file.write("=" * 40 + "\n")
-
-                # 點擊返回上一頁
-                driver.back()
-
-                # 等待返回後頁面加載完成
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "li[class*='StreamMegaItem']"))
-                )
-                
-                # 再次查找所有新聞項目
-                news = driver.find_elements(By.CSS_SELECTOR, "li[class*='StreamMegaItem']")
-                news = news[:20]
-            except Exception as e:
-                print("處理過程中發生錯誤：", e)
-    if count == 2:
-        break
+                    print("處理過程中發生錯誤：", e)
 
 # 結束並關閉瀏覽器
 driver.quit()
